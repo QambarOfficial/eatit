@@ -5,7 +5,7 @@ import 'package:googleapis_auth/googleapis_auth.dart' as auth;
 import 'package:http/http.dart' as http;
 import 'package:google_sign_in/google_sign_in.dart';
 import 'SignInScreen.dart';
-import 'user_prefs.dart';
+import 'UserPrefs.dart';
 
 class ProfileScreen extends StatefulWidget {
   final User user;
