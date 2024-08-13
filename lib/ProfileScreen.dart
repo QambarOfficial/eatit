@@ -22,7 +22,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   );
 
   late Future<List<Map<String, dynamic>>> _contactsFuture;
-  List<Map<String, dynamic>> _familyMembers = [];
+  final List<Map<String, dynamic>> _familyMembers = [];
   List<Map<String, dynamic>> _filteredContacts = [];
   String _searchQuery = '';
 

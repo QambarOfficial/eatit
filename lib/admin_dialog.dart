@@ -138,7 +138,7 @@ class _AdminDialogState extends State<AdminDialog> {
         child: Text(name[0]),
       ),
       trailing: IconButton(
-        icon: Icon(Icons.delete),
+        icon: const Icon(Icons.delete),
         onPressed: () {
           _deleteFamilyMember(index);
         },

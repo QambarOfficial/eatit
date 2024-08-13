@@ -14,7 +14,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
   @override
   Widget build(BuildContext context) {
-    String _getTimeOfDay() {
+    String getTimeOfDay() {
       final now = DateTime.now(); // Get current time
       final hours = now.hour; // Get the current hour
 
@@ -31,7 +31,7 @@ class _SearchScreenState extends State<SearchScreen> {
       }
     }
 
-    final timeOfDay = _getTimeOfDay(); // Determine the time of day
+    final timeOfDay = getTimeOfDay(); // Determine the time of day
 
     // Sample poll data
     final pollOptions = votes.keys.map((food) {
@@ -145,10 +145,10 @@ class _SearchScreenState extends State<SearchScreen> {
                 print('Vote button pressed: Sending requests to all members.');
                 // Logic to send requests to all members goes here
               },
-              child: const Text('Vote'),
               style: ElevatedButton.styleFrom(
                 foregroundColor: Colors.white, backgroundColor: Colors.black, // Text color
               ),
+              child: const Text('Vote'),
             ),
           ),
         ],
