@@ -16,7 +16,7 @@ void main() async {
   );
 
   final firebaseUser = FirebaseAuth.instance.currentUser;
-  
+
   runApp(MyApp(user: firebaseUser));
 }
 
@@ -30,13 +30,24 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Khane me kya hai',
       theme: ThemeData(
-        primarySwatch: Colors.grey,
-        primaryColor: Colors.black,
-        buttonTheme: const ButtonThemeData(
-          buttonColor: Colors.black,
+        useMaterial3: true,
+        colorScheme: const ColorScheme(
+          brightness: Brightness.light,
+          primary: Colors.black,
+          onPrimary: Colors.white,
+          secondary: Colors.white,
+          onSecondary: Colors.black,
+          error: Colors.red,
+          onError: Colors.white,
+          surface: Colors.white,
+          onSurface: Colors.black,
         ),
-        colorScheme: ColorScheme.fromSwatch(primarySwatch: Colors.grey)
-            .copyWith(secondary: Colors.black),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            foregroundColor: Colors.white,
+            backgroundColor: Colors.black,
+          ),
+        ),
       ),
       home: user == null ? SignInScreen() : HomeNavigationBar(user: user!),
     );
