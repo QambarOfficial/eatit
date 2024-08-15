@@ -4,8 +4,10 @@ import 'package:googleapis/people/v1.dart' as people_api;
 import 'package:googleapis_auth/googleapis_auth.dart' as auth;
 import 'package:http/http.dart' as http;
 import 'package:google_sign_in/google_sign_in.dart';
+
 import 'SignInScreen.dart';
 import 'UserPrefs.dart';
+import 'CustomDrawer.dart';
 
 class ProfileScreen extends StatefulWidget {
   final User user;
@@ -141,73 +143,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ],
       ),
-      endDrawer: Drawer(
-        child: Column(
-          children: [
-            AppBar(
-              title: const Text('Contacts'),
-              automaticallyImplyLeading: false,
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.logout),
-                  onPressed: () => _signOut(context),
-                ),
-              ],
-            ),
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: TextField(
-                decoration: const InputDecoration(
-                  labelText: 'Search',
-                  border: OutlineInputBorder(),
-                ),
-                onChanged: _filterContacts,
-              ),
-            ),
-            Expanded(
-              child: FutureBuilder<List<Map<String, dynamic>>>(
-                future: _contactsFuture,
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  } else if (snapshot.hasError) {
-                    return Center(child: Text('Error: ${snapshot.error}'));
-                  } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                    return const Center(child: Text('No contacts found.'));
-                  }
-
-                  final contacts = _searchQuery.isEmpty
-                      ? snapshot.data!
-                      : _filteredContacts;
-
-                  return ListView.builder(
-                    itemCount: contacts.length,
-                    itemBuilder: (context, index) {
-                      final contact = contacts[index];
-                      return ListTile(
-                        leading: CircleAvatar(
-                          backgroundImage: contact['photoUrl'] != ''
-                              ? NetworkImage(contact['photoUrl'])
-                              : null,
-                          child: contact['photoUrl'] == ''
-                              ? const Icon(Icons.person)
-                              : null,
-                        ),
-                        title: Text(contact['name'] ?? 'No Name'),
-                        subtitle: Text(contact['email'] ?? 'No Email'),
-                        trailing: Text(contact['phoneNumber'] ?? 'No Phone Number'),
-                        onTap: () {
-                          _addFamilyMember(contact);
-                          Navigator.pop(context);
-                        },
-                      );
-                    },
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
+      endDrawer: CustomDrawer(
+        contactsFuture: _contactsFuture,
+        onAddFamilyMember: _addFamilyMember,
+        onFilterContacts: _filterContacts,
+        searchQuery: _searchQuery,
+        onSignOut: () => _signOut(context),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
