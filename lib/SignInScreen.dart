@@ -27,23 +27,19 @@ class SignInScreen extends StatelessWidget {
         final User? user = userCredential.user;
 
         if (user != null) {
-          // Get user details
-          final String email = user.email ?? 'No email';
-          final String displayName = user.displayName ?? 'No username';
-          final String photoURL = user.photoURL ?? 'No photo URL';
+          // Check if the user is already registered in Firestore
+          DocumentSnapshot userDoc = await _firestore.collection('family').doc(user.uid).get();
 
-          // Save user details to Firestore
-          await _firestore.collection('family').doc(user.uid).set({
-            'email': email,
-            'username': displayName,
-            'photoURL': photoURL,
-          });
-
-          // Navigate to the next screen
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => HomeNavigationBar(user: user)),
-          );
+          if (userDoc.exists) {
+            // User is already registered, proceed with login
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => HomeNavigationBar(user: user)),
+            );
+          } else {
+            // User is not registered, prompt to set up a new account
+            _showAccountSetupDialog(context, user);
+          }
         } else {
           // Handle the case where the user is null
           ScaffoldMessenger.of(context).showSnackBar(
@@ -58,6 +54,71 @@ class SignInScreen extends StatelessWidget {
         SnackBar(content: Text('Sign-in failed: $e')),
       );
     }
+  }
+
+  void _showAccountSetupDialog(BuildContext context, User user) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Set up your account'),
+          content: const Text('Choose your account type:'),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                // Create a normal user account
+                await _createAccount(user, 'user');
+                Navigator.pop(context); // Close the dialog
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => HomeNavigationBar(user: user)),
+                );
+              },
+              child: const Text('Normal User'),
+            ),
+            TextButton(
+              onPressed: () async {
+                // Create an admin account
+                await _createAccount(user, 'admin');
+                Navigator.pop(context); // Close the dialog
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => HomeNavigationBar(user: user)),
+                );
+              },
+              child: const Text('Admin'),
+            ),
+            TextButton(
+              onPressed: () async {
+                // Delete the user's account and navigate back to the login screen
+                await user.delete();
+                Navigator.pop(context); // Close the dialog
+                _googleSignIn.signOut(); // Sign out of Google
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => SignInScreen()), // Go back to login screen
+                );
+              },
+              child: const Text('Cancel'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _createAccount(User user, String accountType) async {
+    final String email = user.email ?? 'No email';
+    final String displayName = user.displayName ?? 'No username';
+    final String photoURL = user.photoURL ?? '';
+
+    // Save user details to Firestore
+    await _firestore.collection('family').doc(user.uid).set({
+      'email': email,
+      'username': displayName,
+      'photoURL': photoURL,
+      'accountType': accountType,
+    });
   }
 
   @override
