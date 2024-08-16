@@ -17,24 +17,28 @@ class SignInScreen extends StatelessWidget {
       // Sign in with Google
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
       if (googleUser != null) {
-        final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+        final GoogleSignInAuthentication googleAuth =
+            await googleUser.authentication;
         final AuthCredential credential = GoogleAuthProvider.credential(
           accessToken: googleAuth.accessToken,
           idToken: googleAuth.idToken,
         );
 
-        final UserCredential userCredential = await _auth.signInWithCredential(credential);
+        final UserCredential userCredential =
+            await _auth.signInWithCredential(credential);
         final User? user = userCredential.user;
 
         if (user != null) {
           // Check if the user is already registered in Firestore
-          DocumentSnapshot userDoc = await _firestore.collection('family').doc(user.uid).get();
+          DocumentSnapshot userDoc =
+              await _firestore.collection('family').doc(user.uid).get();
 
           if (userDoc.exists) {
             // User is already registered, proceed with login
             Navigator.pushReplacement(
               context,
-              MaterialPageRoute(builder: (context) => HomeNavigationBar(user: user)),
+              MaterialPageRoute(
+                  builder: (context) => HomeNavigationBar(user: user)),
             );
           } else {
             // User is not registered, prompt to set up a new account
@@ -66,24 +70,26 @@ class SignInScreen extends StatelessWidget {
           actions: [
             TextButton(
               onPressed: () async {
-                // Create a normal user account
+                // Create a normal user account without family code
                 await _createAccount(user, 'user');
                 Navigator.pop(context); // Close the dialog
                 Navigator.pushReplacement(
                   context,
-                  MaterialPageRoute(builder: (context) => HomeNavigationBar(user: user)),
+                  MaterialPageRoute(
+                      builder: (context) => HomeNavigationBar(user: user)),
                 );
               },
               child: const Text('Normal User'),
             ),
             TextButton(
               onPressed: () async {
-                // Create an admin account
+                // Create an admin account with a family code
                 await _createAccount(user, 'admin');
                 Navigator.pop(context); // Close the dialog
                 Navigator.pushReplacement(
                   context,
-                  MaterialPageRoute(builder: (context) => HomeNavigationBar(user: user)),
+                  MaterialPageRoute(
+                      builder: (context) => HomeNavigationBar(user: user)),
                 );
               },
               child: const Text('Admin'),
@@ -96,7 +102,9 @@ class SignInScreen extends StatelessWidget {
                 _googleSignIn.signOut(); // Sign out of Google
                 Navigator.pushReplacement(
                   context,
-                  MaterialPageRoute(builder: (context) => SignInScreen()), // Go back to login screen
+                  MaterialPageRoute(
+                      builder: (context) =>
+                          SignInScreen()), // Go back to login screen
                 );
               },
               child: const Text('Cancel'),
@@ -107,19 +115,30 @@ class SignInScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _createAccount(User user, String accountType) async {
-    final String email = user.email ?? 'No email';
-    final String displayName = user.displayName ?? 'No username';
-    final String photoURL = user.photoURL ?? '';
-
-    // Save user details to Firestore
-    await _firestore.collection('family').doc(user.uid).set({
-      'email': email,
-      'username': displayName,
-      'photoURL': photoURL,
-      'accountType': accountType,
-    });
-  }
+ Future<void> _createAccount(User user, String accountType) async {
+  final String email = user.email ?? 'No email';
+  final String displayName = user.displayName ?? 'No username';
+  final String photoURL = user.photoURL ?? '';
+  
+  final String familyCode = accountType == 'admin' ? user.uid : '';
+  
+  // Save or update user details in Firestore
+  await _firestore.collection('family').doc(user.uid).set({
+    'email': email,
+    'username': displayName,
+    'photoURL': photoURL,
+    'accountType': accountType,
+    'createdAt': FieldValue.serverTimestamp(),
+    'familyCode': familyCode,
+  }, SetOptions(merge: true));
+  
+  // // If the user is an admin, create or update the admin document
+  // if (accountType == 'admin') {
+  //   await _firestore.collection('admins').doc(user.uid).set({
+  //     'familyMembers': [], // Initialize with an empty list
+  //   }, SetOptions(merge: true));
+  // }
+}
 
   @override
   Widget build(BuildContext context) {
