@@ -1,19 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class CustomDrawer extends StatefulWidget {
-  final Future<List<Map<String, dynamic>>> contactsFuture;
-  final Function(Map<String, dynamic>) onAddFamilyMember;
-  final Function(String) onFilterContacts;
-  final String searchQuery;
   final VoidCallback onSignOut;
 
   const CustomDrawer({
     super.key,
-    required this.contactsFuture,
-    required this.onAddFamilyMember,
-    required this.onFilterContacts,
-    required this.searchQuery,
     required this.onSignOut,
   });
 
@@ -23,11 +17,80 @@ class CustomDrawer extends StatefulWidget {
 
 class _CustomDrawerState extends State<CustomDrawer> {
   late Future<PackageInfo> _packageInfoFuture;
+  bool _isAdmin = false;
+  String? _familyCode;
+  final TextEditingController _familyCodeController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _packageInfoFuture = PackageInfo.fromPlatform(); // Initialize app info fetch
+    _checkUserRole(); // Check if the current user is an admin and fetch family code
+  }
+
+  Future<void> _checkUserRole() async {
+    User? currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser != null) {
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('family').doc(currentUser.uid).get();
+      if (userDoc.exists) {
+        print('Document Data: ${userDoc.data()}'); // Debugging line to check document data
+
+        setState(() {
+          _isAdmin = userDoc['accountType'] == 'admin';
+          _familyCode = userDoc['familyCode'];
+        });
+
+        print('Is Admin: $_isAdmin'); // Debugging line to check if user is admin
+        print('Family Code: $_familyCode'); // Debugging line to check family code
+
+      } else {
+        // Handle case where userDoc doesn't exist
+        setState(() {
+          _isAdmin = false;
+          _familyCode = null;
+        });
+        print('User document does not exist.'); // Debugging line
+      }
+    }
+  }
+
+  Future<void> _joinFamily() async {
+    final String code = _familyCodeController.text.trim();
+    if (code.isNotEmpty) {
+      try {
+        // Check if the family code exists
+        final QuerySnapshot querySnapshot = await FirebaseFirestore.instance
+            .collection('family')
+            .where('familyCode', isEqualTo: code)
+            .limit(1)
+            .get();
+
+        if (querySnapshot.docs.isNotEmpty) {
+          final docId = querySnapshot.docs.first.id;
+          final User? currentUser = FirebaseAuth.instance.currentUser;
+
+          if (currentUser != null) {
+            // Update user document with the family code
+            await FirebaseFirestore.instance
+                .collection('family')
+                .doc(currentUser.uid)
+                .update({'familyCode': code});
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Successfully joined family with code $code')),
+            );
+          }
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Family code not found')),
+          );
+        }
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to join family: $e')),
+        );
+      }
+    }
   }
 
   @override
@@ -36,7 +99,7 @@ class _CustomDrawerState extends State<CustomDrawer> {
       child: Column(
         children: [
           AppBar(
-            title: const Text('Contacts'),
+            title: const Text('Family Code'),
             automaticallyImplyLeading: false,
             actions: [
               IconButton(
@@ -45,63 +108,61 @@ class _CustomDrawerState extends State<CustomDrawer> {
               ),
             ],
           ),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: TextField(
-              decoration: const InputDecoration(
-                labelText: 'Search',
-                border: OutlineInputBorder(),
+          if (_isAdmin && _familyCode != null)
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Share this code with your family members to join:',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  SelectableText(
+                    _familyCode!,
+                    style: const TextStyle(fontSize: 24, color: Colors.blue),
+                  ),
+                  const SizedBox(height: 8),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      _copyCodeToClipboard(_familyCode!);
+                    },
+                    icon: const Icon(Icons.copy),
+                    label: const Text('Copy Code'),
+                  ),
+                ],
               ),
-              onChanged: widget.onFilterContacts,
+            )
+          else if (_isAdmin)
+            const Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Text('Generating your family code...', style: TextStyle(fontSize: 16)),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Join a Family:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _familyCodeController,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      labelText: 'Enter Family Code',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ElevatedButton(
+                    onPressed: _joinFamily,
+                    child: const Text('Join Family'),
+                  ),
+                ],
+              ),
             ),
-          ),
-          Expanded(
-            child: FutureBuilder<List<Map<String, dynamic>>>(
-              future: widget.contactsFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                } else if (snapshot.hasError) {
-                  return Center(child: Text('Error: ${snapshot.error}'));
-                } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return const Center(child: Text('No contacts found.'));
-                }
-
-                final contacts = widget.searchQuery.isEmpty
-                    ? snapshot.data!
-                    : snapshot.data!.where((contact) {
-                        final name = contact['name']?.toLowerCase() ?? '';
-                        final email = contact['email']?.toLowerCase() ?? '';
-                        return name.contains(widget.searchQuery) || email.contains(widget.searchQuery);
-                      }).toList();
-
-                return ListView.builder(
-                  itemCount: contacts.length,
-                  itemBuilder: (context, index) {
-                    final contact = contacts[index];
-                    return ListTile(
-                      leading: CircleAvatar(
-                        backgroundImage: contact['photoUrl'] != ''
-                            ? NetworkImage(contact['photoUrl'])
-                            : null,
-                        child: contact['photoUrl'] == ''
-                            ? const Icon(Icons.person)
-                            : null,
-                      ),
-                      title: Text(contact['name'] ?? 'No Name'),
-                      subtitle: Text(contact['email'] ?? 'No Email'),
-                      trailing: Text(contact['phoneNumber'] ?? 'No Phone Number'),
-                      onTap: () {
-                        widget.onAddFamilyMember(contact);
-                        Navigator.pop(context);
-                      },
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-          const Divider(), 
+          const Divider(),
           FutureBuilder<PackageInfo>(
             future: _packageInfoFuture,
             builder: (context, snapshot) {
@@ -132,8 +193,73 @@ class _CustomDrawerState extends State<CustomDrawer> {
               );
             },
           ),
+          const Divider(),
+          // Delete Account Button
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red, // Red button to indicate danger
+              ),
+              onPressed: _showDeleteAccountDialog, // Show confirmation dialog
+              child: const Text('Delete Account'),
+            ),
+          ),
         ],
       ),
     );
+  }
+
+  // Function to copy the family code to the clipboard
+  void _copyCodeToClipboard(String code) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Family code $code copied to clipboard'),
+      ),
+    );
+  }
+
+  // Show confirmation dialog before deleting the account
+  void _showDeleteAccountDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Confirm Delete'),
+          content: const Text('Are you sure you want to delete your account? This action cannot be undone.'),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(); // Close the dialog
+              },
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(); // Close the dialog
+                _deleteAccount(); // Delete the account
+              },
+              child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Delete account from Firestore and sign out
+  Future<void> _deleteAccount() async {
+    try {
+      User? currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser != null) {
+        await FirebaseFirestore.instance.collection('family').doc(currentUser.uid).delete(); // Delete user data from Firestore
+        await currentUser.delete(); // Delete FirebaseAuth account
+        widget.onSignOut(); // Sign out and return to login screen
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to delete account: $e')),
+      );
+    }
   }
 }

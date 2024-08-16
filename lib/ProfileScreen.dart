@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:googleapis/people/v1.dart' as people_api;
@@ -27,13 +28,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final List<Map<String, dynamic>> _familyMembers = [];
   List<Map<String, dynamic>> _filteredContacts = [];
   String _searchQuery = '';
+  bool _isAdmin = false; // To check account type
 
-  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>(); // Added key
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
   void initState() {
     super.initState();
     _contactsFuture = _fetchContacts();
+    _checkIfAdmin(); // Check if the current user is an admin
+  }
+
+  Future<void> _checkIfAdmin() async {
+    User? currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser != null) {
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('family').doc(currentUser.uid).get();
+      if (userDoc.exists) {
+        setState(() {
+          _isAdmin = userDoc['accountType'] == 'admin'; // Check the account type
+        });
+      }
+    }
   }
 
   Future<List<Map<String, dynamic>>> _fetchContacts() async {
@@ -96,16 +111,44 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   void _signOut(BuildContext context) => _handleSignOut(context);
 
-  void _addFamilyMember(Map<String, dynamic> contact) {
-    setState(() {
-      _familyMembers.add(contact);
-    });
+  Future<void> _addFamilyMember(Map<String, dynamic> contact) async {
+    try {
+      User? currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null || !_isAdmin) return; // Only allow admin users to add members
+
+      final familyDocRef = FirebaseFirestore.instance.collection('family').doc(currentUser.uid);
+
+      // Add the family member to the Firestore database
+      await familyDocRef.update({
+        'familyMembers': FieldValue.arrayUnion([contact]),
+      });
+
+      setState(() {
+        _familyMembers.add(contact);
+      });
+    } catch (e) {
+      print('Error adding family member: $e');
+    }
   }
 
-  void _removeFamilyMember(Map<String, dynamic> contact) {
-    setState(() {
-      _familyMembers.remove(contact);
-    });
+  void _removeFamilyMember(Map<String, dynamic> contact) async {
+    try {
+      User? currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null || !_isAdmin) return; // Only allow admin users to remove members
+
+      final familyDocRef = FirebaseFirestore.instance.collection('family').doc(currentUser.uid);
+
+      // Remove the family member from the Firestore database
+      await familyDocRef.update({
+        'familyMembers': FieldValue.arrayRemove([contact]),
+      });
+
+      setState(() {
+        _familyMembers.remove(contact);
+      });
+    } catch (e) {
+      print('Error removing family member: $e');
+    }
   }
 
   void _filterContacts(String query) {
@@ -130,24 +173,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      key: _scaffoldKey, // Added key here
+      key: _scaffoldKey,
       appBar: AppBar(
         title: const Text('Profile'),
         actions: [
           IconButton(
             icon: const Icon(Icons.menu),
             onPressed: () {
-              // Using the GlobalKey to open the end drawer
-              _scaffoldKey.currentState?.openEndDrawer(); // Updated
+              _scaffoldKey.currentState?.openEndDrawer();
             },
           ),
         ],
       ),
       endDrawer: CustomDrawer(
-        contactsFuture: _contactsFuture,
-        onAddFamilyMember: _addFamilyMember,
-        onFilterContacts: _filterContacts,
-        searchQuery: _searchQuery,
         onSignOut: () => _signOut(context),
       ),
       body: Padding(
@@ -198,10 +236,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             const SizedBox(height: 16),
             ElevatedButton(
-              onPressed: () {
-                // Using the GlobalKey to open the end drawer
-                _scaffoldKey.currentState?.openEndDrawer(); // Updated
-              },
+              onPressed: _isAdmin ? () {
+                _scaffoldKey.currentState?.openEndDrawer();
+              } : null, // Disable the button if not an admin
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _isAdmin ? Theme.of(context).primaryColor : Colors.grey, // Grey out the button if not an admin
+              ),
               child: const Text('Add Member'),
             ),
           ],
