@@ -1,277 +1,117 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 class ChatScreen extends StatefulWidget {
-  final String selectedMenu;
-
-  const ChatScreen({super.key, required this.selectedMenu});
-
   @override
   _ChatScreenState createState() => _ChatScreenState();
 }
 
 class _ChatScreenState extends State<ChatScreen> {
-  final messageTextController = TextEditingController();
-  final List<Message> messages = [
-    Message(
-        text: "Hello everyone! How's it going?",
-        sender: "Admin",
-        time: DateTime.now().subtract(const Duration(minutes: 10)),
-        profileImage: 'assets/images/admin.png',
-        reactions: []),
-    Message(
-        text: "Hi Admin, everything's great!",
-        sender: "User1",
-        time: DateTime.now().subtract(const Duration(minutes: 8)),
-        profileImage: 'assets/images/user1.png',
-        reactions: []),
-    Message(
-        text: "Hey! I have a question.",
-        sender: "User2",
-        time: DateTime.now().subtract(const Duration(minutes: 5)),
-        profileImage: 'assets/images/user2.png',
-        reactions: []),
-  ];
-  bool _isTyping = false;
+  final TextEditingController _messageController = TextEditingController();
+  late Future<Map<String, dynamic>?> _userFuture;
 
-  void sendMessage() {
-    if (messageTextController.text.trim().isNotEmpty) {
-      setState(() {
-        messages.add(Message(
-            text: messageTextController.text,
-            sender: 'User3',
-            time: DateTime.now(),
-            profileImage: 'https://via.placeholder.com/50?text=User3',
-            reactions: []));
-        messageTextController.clear();
-        _isTyping = false;
-      });
-    }
+  @override
+  void initState() {
+    super.initState();
+    _userFuture = _fetchUserDetails();
   }
 
-  void addReaction(int index, String reaction) {
-    setState(() {
-      messages[index].reactions.add(reaction);
-    });
+  Future<Map<String, dynamic>?> _fetchUserDetails() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      if (doc.exists) {
+        return doc.data(); // Return the raw Firestore document data
+      }
+    }
+    return null;
+  }
+
+  Future<void> _sendMessage() async {
+    try {
+      final user = await _userFuture;
+      if (user != null) {
+        final message = _messageController.text.trim();
+        if (message.isNotEmpty) {
+          // Ensure user data is accessed safely
+          await FirebaseFirestore.instance.collection('messages').add({
+            'uid': user['uid'] ?? '',
+            'email': user['email'] ?? '',
+            'displayName': user['displayName'] ?? '',
+            'photoURL': user['photoURL'] ?? '',
+            'message': message,
+            'timestamp': FieldValue.serverTimestamp(),
+          });
+          _messageController.clear();
+        }
+      }
+    } catch (e) {
+      print('Error sending message: $e'); // Print error to console
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.selectedMenu),
+        title: const Text('Chat Screen'),
       ),
-      body: SafeArea(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: <Widget>[
-            Expanded(
-              child: ListView.builder(
-                reverse: true,
-                padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 20.0),
-                itemCount: messages.length,
-                itemBuilder: (context, index) {
-                  final message = messages[messages.length - 1 - index];
-                  return MessageBubble(
-                    sender: message.sender,
-                    text: message.text,
-                    time: message.time,
-                    profileImage: message.profileImage,
-                    isMe: message.sender == 'User3',
-                    reactions: message.reactions,
-                    onReact: (reaction) => addReaction(messages.length - 1 - index, reaction),
-                  );
-                },
-              ),
-            ),
-            if (_isTyping)
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 10.0),
-                child: Text(
-                  'User3 is typing...',
-                ),
-              ),
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Row(
-                children: <Widget>[
-                  Expanded(
-                    child: TextField(
-                      controller: messageTextController,
-                      decoration: const InputDecoration(
-                        filled: true,
-                        hintText: 'Type your message here...',
-                      ),
-                      onChanged: (text) {
-                        setState(() {
-                          _isTyping = text.isNotEmpty;
-                        });
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 8.0),
-                  FloatingActionButton(
-                    onPressed: sendMessage,
-                    child: const Icon(Icons.send),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class Message {
-  final String sender;
-  final String text;
-  final DateTime time;
-  final String profileImage;
-  final List<String> reactions;
-
-  Message({
-    required this.sender,
-    required this.text,
-    required this.time,
-    required this.profileImage,
-    required this.reactions,
-  });
-}
-
-class MessageBubble extends StatelessWidget {
-  final String sender;
-  final String text;
-  final DateTime time;
-  final String profileImage;
-  final bool isMe;
-  final List<String> reactions;
-  final Function(String) onReact;
-
-  const MessageBubble({
-    super.key,
-    required this.sender,
-    required this.text,
-    required this.time,
-    required this.profileImage,
-    required this.isMe,
-    required this.reactions,
-    required this.onReact,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final timeString = DateFormat('h:mm a').format(time);
-    return Padding(
-      padding: const EdgeInsets.all(10.0),
-      child: Column(
-        crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      body: Column(
         children: <Widget>[
-          Row(
-            mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
-            children: <Widget>[
-              if (!isMe) ...[
-                CircleAvatar(
-                  backgroundImage: NetworkImage(profileImage),
-                  radius: 20,
-                ),
-                const SizedBox(width: 8.0),
-              ],
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Material(
-                      borderRadius: isMe
-                          ? const BorderRadius.only(
-                              topLeft: Radius.circular(30.0),
-                              bottomLeft: Radius.circular(30.0),
-                              bottomRight: Radius.circular(30.0),
-                            )
-                          : const BorderRadius.only(
-                              topRight: Radius.circular(30.0),
-                              bottomLeft: Radius.circular(30.0),
-                              bottomRight: Radius.circular(30.0),
-                            ),
-                      elevation: 5.0,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 20.0),
-                        child: Column(
-                          crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Text(
-                              text,
-                              style: const TextStyle(fontSize: 15.0),
-                            ),
-                            const SizedBox(height: 5.0),
-                            Text(
-                              timeString,
-                              style: const TextStyle(fontSize: 10.0),
-                            ),
-                          ],
-                        ),
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance.collection('messages').orderBy('timestamp', descending: true).snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                  return const Center(child: Text('No messages yet'));
+                }
+                final messages = snapshot.data!.docs;
+                return ListView.builder(
+                  reverse: true,
+                  itemCount: messages.length,
+                  itemBuilder: (context, index) {
+                    final message = messages[index].data() as Map<String, dynamic>;
+                    return ListTile(
+                      leading: CircleAvatar(
+                        backgroundImage: NetworkImage(message['photoURL'] ?? ''),
+                      ),
+                      title: Text(message['displayName'] ?? 'No name'),
+                      subtitle: Text(message['message'] ?? 'No message'),
+                      trailing: Text(
+                        (message['timestamp'] as Timestamp?)?.toDate().toLocal().toString() ?? 'No timestamp',
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Row(
+              children: <Widget>[
+                Expanded(
+                  child: TextField(
+                    controller: _messageController,
+                    decoration: InputDecoration(
+                      hintText: 'Enter your message...',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12.0),
                       ),
                     ),
-                  ],
+                  ),
                 ),
-              ),
-              if (isMe) ...[
-                const SizedBox(width: 8.0),
-                CircleAvatar(
-                  backgroundImage: NetworkImage(profileImage),
-                  radius: 20,
+                IconButton(
+                  icon: const Icon(Icons.send),
+                  onPressed: _sendMessage,
                 ),
               ],
-            ],
+            ),
           ),
-          const SizedBox(height: 5.0),
-          Row(
-            mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
-            children: <Widget>[
-              ...reactions.map((reaction) => Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 2.0),
-                    child: Text(
-                      reaction,
-                      style: const TextStyle(fontSize: 18.0),
-                    ),
-                  )),
-              IconButton(
-                icon: const Icon(Icons.emoji_emotions),
-                onPressed: () {
-                  showDialog(
-                    context: context,
-                    builder: (context) => ReactionDialog(onReact: onReact),
-                  );
-                },
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class ReactionDialog extends StatelessWidget {
-  final Function(String) onReact;
-
-  const ReactionDialog({super.key, required this.onReact});
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('React with an emoji'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          ...['😊', '👍', '❤️', '😂'].map((emoji) => IconButton(
-                icon: Text(emoji, style: const TextStyle(fontSize: 30)),
-                onPressed: () {
-                  onReact(emoji);
-                  Navigator.of(context).pop();
-                },
-              )),
         ],
       ),
     );

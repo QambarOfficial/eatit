@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/services.dart'; // For clipboard operations
 
 class CustomDrawer extends StatefulWidget {
   final User user;
@@ -11,8 +12,7 @@ class CustomDrawer extends StatefulWidget {
     super.key,
     required this.onSignOut,
     required this.user,
-    String? familyCode,
-    required bool isAdmin,
+    required bool isAdmin, String? familyCode,
   });
 
   @override
@@ -28,80 +28,58 @@ class _CustomDrawerState extends State<CustomDrawer> {
   @override
   void initState() {
     super.initState();
-    _packageInfoFuture =
-        PackageInfo.fromPlatform(); // Initialize app info fetch
-    _checkUserRole(); // Check if the current user is an admin and fetch family code
+    _packageInfoFuture = PackageInfo.fromPlatform();
+    _fetchUserData();
   }
 
-  Future<void> _checkUserRole() async {
-    User? currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser != null) {
-      try {
-        DocumentSnapshot userDoc = await FirebaseFirestore.instance
+  Future<void> _fetchUserData() async {
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser != null) {
+        final userDoc = await FirebaseFirestore.instance
             .collection('users')
             .doc(currentUser.uid)
             .get();
         if (userDoc.exists) {
-          print(
-              'Document Data: ${userDoc.data()}'); // Debugging line to check document data
-
           setState(() {
             _isAdmin = userDoc['accountType'] == 'admin';
             _familyCode = userDoc['familyCode'];
           });
-
-          print(
-              'Is Admin: $_isAdmin'); // Debugging line to check if user is admin
-          print(
-              'Family Code: $_familyCode'); // Debugging line to check family code
         } else {
-          // Handle case where userDoc doesn't exist
           setState(() {
             _isAdmin = false;
             _familyCode = null;
           });
-          print('User document does not exist.'); // Debugging line
         }
-      } catch (e) {
-        // Handle errors
-        print('Error fetching user role: $e'); // Debugging line
       }
-    } else {
-      print('No current user found.'); // Debugging line
+    } catch (e) {
+      print('Error fetching user data: $e');
     }
   }
 
   Future<void> _joinFamily() async {
-    final String code = _familyCodeController.text.trim();
+    final code = _familyCodeController.text.trim();
     if (code.isNotEmpty) {
       try {
-        // Check if the family code exists
-        final DocumentSnapshot familyDoc = await FirebaseFirestore.instance
+        final familyDoc = await FirebaseFirestore.instance
             .collection('families')
             .doc(code)
             .get();
-
         if (familyDoc.exists) {
-          final User? currentUser = FirebaseAuth.instance.currentUser;
-
+          final currentUser = FirebaseAuth.instance.currentUser;
           if (currentUser != null) {
-            // Update user document with the family code
             await FirebaseFirestore.instance
                 .collection('users')
                 .doc(currentUser.uid)
                 .update({'familyCode': code});
-
-            // Add the user to the family's members list
             await FirebaseFirestore.instance
                 .collection('families')
                 .doc(code)
                 .update({
               'members': FieldValue.arrayUnion([currentUser.uid]),
             });
-
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                  content: Text('Successfully joined family with code $code')),
+              SnackBar(content: Text('Joined family with code $code')),
             );
           }
         } else {
@@ -114,6 +92,19 @@ class _CustomDrawerState extends State<CustomDrawer> {
           SnackBar(content: Text('Failed to join family: $e')),
         );
       }
+    }
+  }
+
+  Future<void> _copyCodeToClipboard(String code) async {
+    try {
+      await Clipboard.setData(ClipboardData(text: code));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Family code $code copied to clipboard')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to copy family code: $e')),
+      );
     }
   }
 
@@ -139,7 +130,7 @@ class _CustomDrawerState extends State<CustomDrawer> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Share this code with your family members to join:',
+                    'Share this code with your family members to let others join:',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
@@ -149,9 +140,7 @@ class _CustomDrawerState extends State<CustomDrawer> {
                   ),
                   const SizedBox(height: 8),
                   ElevatedButton.icon(
-                    onPressed: () {
-                      _copyCodeToClipboard(_familyCode!);
-                    },
+                    onPressed: () => _copyCodeToClipboard(_familyCode!),
                     icon: const Icon(Icons.copy),
                     label: const Text('Copy Code'),
                   ),
@@ -164,9 +153,10 @@ class _CustomDrawerState extends State<CustomDrawer> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Join a Family:',
-                      style:
-                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const Text(
+                    'Join a Family:',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
                   const SizedBox(height: 8),
                   TextField(
                     controller: _familyCodeController,
@@ -221,14 +211,13 @@ class _CustomDrawerState extends State<CustomDrawer> {
             },
           ),
           const Divider(),
-          // Delete Account Button
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red, // Red button to indicate danger
               ),
-              onPressed: _showDeleteAccountDialog, // Show confirmation dialog
+              onPressed: _showDeleteAccountDialog,
               child: const Text('Delete Account'),
             ),
           ),
@@ -237,16 +226,6 @@ class _CustomDrawerState extends State<CustomDrawer> {
     );
   }
 
-  // Function to copy the family code to the clipboard
-  void _copyCodeToClipboard(String code) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Family code $code copied to clipboard'),
-      ),
-    );
-  }
-
-  // Show confirmation dialog before deleting the account
   void _showDeleteAccountDialog() {
     showDialog(
       context: context,
@@ -257,15 +236,13 @@ class _CustomDrawerState extends State<CustomDrawer> {
               'Are you sure you want to delete your account? This action cannot be undone.'),
           actions: <Widget>[
             TextButton(
-              onPressed: () {
-                Navigator.of(context).pop(); // Close the dialog
-              },
+              onPressed: () => Navigator.of(context).pop(),
               child: const Text('Cancel'),
             ),
             TextButton(
               onPressed: () {
-                Navigator.of(context).pop(); // Close the dialog
-                _deleteAccount(); // Delete the account
+                Navigator.of(context).pop();
+                _deleteAccount();
               },
               child: const Text('Delete', style: TextStyle(color: Colors.red)),
             ),
@@ -275,30 +252,24 @@ class _CustomDrawerState extends State<CustomDrawer> {
     );
   }
 
-  // Delete account from Firestore and sign out
   Future<void> _deleteAccount() async {
     try {
-      User? currentUser = FirebaseAuth.instance.currentUser;
+      final currentUser = FirebaseAuth.instance.currentUser;
       if (currentUser != null) {
         // Remove user document from Firestore
         await FirebaseFirestore.instance
             .collection('users')
             .doc(currentUser.uid)
             .delete();
-        await FirebaseFirestore.instance
-            .collection('families')
-            .doc(currentUser.uid)
-            .delete();
 
-        // Remove user from all family documents where they are a member
-        QuerySnapshot familyDocs = await FirebaseFirestore.instance
-            .collection('families')
+        // Remove the user from all family documents
+        final families = FirebaseFirestore.instance.collection('families');
+        final familyDocs = await families
             .where('members', arrayContains: currentUser.uid)
             .get();
-
+        
         for (var doc in familyDocs.docs) {
-          // Update the family document by removing the user from the members list
-          List<dynamic> members = doc.get('members');
+          final members = List<dynamic>.from(doc.get('members'));
           members.remove(currentUser.uid);
           await doc.reference.update({'members': members});
         }

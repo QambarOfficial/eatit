@@ -5,6 +5,17 @@ Whether you're cooking for yourself, your family, or hosting a dinner party, Men
 
 Changelog
 
+[v1.7.8]
+
+Chat scoket implimented with firestore
+Delete member function reintroduced with firestore connection
+Drawer moved to right
+
+
+
+
+
+
 [v1.7.7]
 
 Family List created

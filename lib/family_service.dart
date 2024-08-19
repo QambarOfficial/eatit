@@ -22,4 +22,17 @@ class FamilyService {
       print('Error updating family members: $e');
     }
   }
+
+  Future<void> unlinkFamilyMember(String familyCode, String memberId) async {
+    try {
+      final familyRef = FirebaseFirestore.instance.collection('families').doc(familyCode);
+      await familyRef.update({
+        'members': FieldValue.arrayRemove([memberId]),
+      });
+    } catch (e) {
+      print('Error unlinking family member: $e');
+    }
+  }
+
+
 }
