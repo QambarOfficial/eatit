@@ -7,7 +7,8 @@ class UserService {
 
   Future<Map<String, dynamic>?> getUserData(String uid) async {
     try {
-      DocumentSnapshot userDoc = await _firestore.collection('users').doc(uid).get();
+      DocumentSnapshot userDoc =
+          await _firestore.collection('users').doc(uid).get();
       return userDoc.data() as Map<String, dynamic>?;
     } catch (e) {
       print('Error fetching user data: $e');
@@ -15,15 +16,20 @@ class UserService {
     }
   }
 
-  Future<void> updateUserFamilyCode(String uid, String familyCode) async {
+  // Method to update the user's family code
+  Future<void> updateUserFamilyCode(String uid, String? familyCode) async {
     try {
-      await _firestore.collection('users').doc(uid).update({'familyCode': familyCode});
+      await _firestore.collection('users').doc(uid).update({
+        'familyCode': familyCode,
+      });
     } catch (e) {
       print('Error updating user family code: $e');
+      throw e;
     }
   }
 
-  Future<void> updateUserTag(String uid, String tag) async { // Added method to update user tag
+  Future<void> updateUserTag(String uid, String tag) async {
+    // Added method to update user tag
     try {
       await _firestore.collection('users').doc(uid).update({'tag': tag});
     } catch (e) {
@@ -43,7 +49,10 @@ class UserService {
 
   Future<void> _removeFromAllFamilies(String uid) async {
     try {
-      QuerySnapshot familyDocs = await _firestore.collection('families').where('members', arrayContains: uid).get();
+      QuerySnapshot familyDocs = await _firestore
+          .collection('families')
+          .where('members', arrayContains: uid)
+          .get();
       for (var doc in familyDocs.docs) {
         List<dynamic> members = doc.get('members');
         members.remove(uid);

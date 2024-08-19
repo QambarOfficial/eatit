@@ -72,11 +72,51 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _removeFamilyMember(String memberId) async {
-    if (_isAdmin && _familyCode != null) {
-      await _familyService.updateFamilyMembers(_familyCode!, memberId);
+  if (_isAdmin && _familyCode != null) {
+    try {
+      // Unlink the family member in Firestore
+      await _familyService.unlinkFamilyMember(_familyCode!, memberId);
+
+      // Remove the member from the local state
       setState(() {
         _familyMembers.removeWhere((member) => member['uid'] == memberId);
       });
+
+      // Update the removed user's data to unlink from the family
+      await _userService.updateUserFamilyCode(memberId, null); // Clear the family code
+
+    } catch (e) {
+      print('Error removing family member: $e');
+    }
+  }
+}
+
+
+  Future<void> _confirmRemoveFamilyMember(String memberId) async {
+    // Show a confirmation dialog before removing a family member
+    final shouldRemove = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false, // Prevent dismissing the dialog by tapping outside
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Confirm Removal'),
+          content: const Text('Are you sure you want to remove this family member?'),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false), // Return false if canceled
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true), // Return true if confirmed
+              child: const Text('Remove'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldRemove == true) {
+      await _removeFamilyMember(memberId);
     }
   }
 
@@ -105,7 +145,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       appBar: AppBar(
         title: const Text('Profile'),
       ),
-      drawer: CustomDrawer(
+      endDrawer: CustomDrawer(
         user: widget.user,
         onSignOut: () => _signOut(context),
         isAdmin: _isAdmin,
@@ -145,22 +185,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     title: Text(member['username'] ?? 'No Name'),
                     subtitle: Text(member['email'] ?? 'No Email'),
                     trailing: _isAdmin
-                        ? (currentTag == 'Admin'
-                            ? Text(currentTag, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.red))
-                            : DropdownButton<String>(
-                                value: currentTag, // Ensure the value is valid
-                                items: ['User', 'Cook'].map((tag) {
-                                  return DropdownMenuItem<String>(
-                                    value: tag,
-                                    child: Text(tag),
-                                  );
-                                }).toList(),
-                                onChanged: (String? newTag) {
-                                  if (newTag != null) {
-                                    _assignTag(member['uid'], newTag);
-                                  }
+                        ? Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // Tag Dropdown
+                              currentTag == 'Admin'
+                                  ? Text(currentTag, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.red))
+                                  : DropdownButton<String>(
+                                      value: currentTag, // Ensure the value is valid
+                                      items: ['User', 'Cook'].map((tag) {
+                                        return DropdownMenuItem<String>(
+                                          value: tag,
+                                          child: Text(tag),
+                                        );
+                                      }).toList(),
+                                      onChanged: (String? newTag) {
+                                        if (newTag != null) {
+                                          _assignTag(member['uid'], newTag);
+                                        }
+                                      },
+                                    ),
+                              // Remove Button
+                              IconButton(
+                                icon: const Icon(Icons.remove_circle, color: Colors.red),
+                                onPressed: () {
+                                  _confirmRemoveFamilyMember(member['uid']);
                                 },
-                              ))
+                              ),
+                            ],
+                          )
                         : Text(
                             currentTag,
                             style: const TextStyle(fontWeight: FontWeight.bold),
