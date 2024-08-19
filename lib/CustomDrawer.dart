@@ -11,6 +11,8 @@ class CustomDrawer extends StatefulWidget {
     super.key,
     required this.onSignOut,
     required this.user,
+    String? familyCode,
+    required bool isAdmin,
   });
 
   @override
@@ -26,7 +28,8 @@ class _CustomDrawerState extends State<CustomDrawer> {
   @override
   void initState() {
     super.initState();
-    _packageInfoFuture = PackageInfo.fromPlatform(); // Initialize app info fetch
+    _packageInfoFuture =
+        PackageInfo.fromPlatform(); // Initialize app info fetch
     _checkUserRole(); // Check if the current user is an admin and fetch family code
   }
 
@@ -34,17 +37,23 @@ class _CustomDrawerState extends State<CustomDrawer> {
     User? currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser != null) {
       try {
-        DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(currentUser.uid).get();
+        DocumentSnapshot userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(currentUser.uid)
+            .get();
         if (userDoc.exists) {
-          print('Document Data: ${userDoc.data()}'); // Debugging line to check document data
+          print(
+              'Document Data: ${userDoc.data()}'); // Debugging line to check document data
 
           setState(() {
             _isAdmin = userDoc['accountType'] == 'admin';
             _familyCode = userDoc['familyCode'];
           });
 
-          print('Is Admin: $_isAdmin'); // Debugging line to check if user is admin
-          print('Family Code: $_familyCode'); // Debugging line to check family code
+          print(
+              'Is Admin: $_isAdmin'); // Debugging line to check if user is admin
+          print(
+              'Family Code: $_familyCode'); // Debugging line to check family code
         } else {
           // Handle case where userDoc doesn't exist
           setState(() {
@@ -91,7 +100,8 @@ class _CustomDrawerState extends State<CustomDrawer> {
             });
 
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Successfully joined family with code $code')),
+              SnackBar(
+                  content: Text('Successfully joined family with code $code')),
             );
           }
         } else {
@@ -154,7 +164,9 @@ class _CustomDrawerState extends State<CustomDrawer> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Join a Family:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const Text('Join a Family:',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
                   TextField(
                     controller: _familyCodeController,
@@ -174,7 +186,8 @@ class _CustomDrawerState extends State<CustomDrawer> {
           else if (_isAdmin && _familyCode == null)
             const Padding(
               padding: EdgeInsets.all(16.0),
-              child: Text('Generating your family code...', style: TextStyle(fontSize: 16)),
+              child: Text('Generating your family code...',
+                  style: TextStyle(fontSize: 16)),
             ),
           const Divider(),
           FutureBuilder<PackageInfo>(
@@ -240,7 +253,8 @@ class _CustomDrawerState extends State<CustomDrawer> {
       builder: (BuildContext context) {
         return AlertDialog(
           title: const Text('Confirm Delete'),
-          content: const Text('Are you sure you want to delete your account? This action cannot be undone.'),
+          content: const Text(
+              'Are you sure you want to delete your account? This action cannot be undone.'),
           actions: <Widget>[
             TextButton(
               onPressed: () {
@@ -266,9 +280,34 @@ class _CustomDrawerState extends State<CustomDrawer> {
     try {
       User? currentUser = FirebaseAuth.instance.currentUser;
       if (currentUser != null) {
-        await FirebaseFirestore.instance.collection('family').doc(currentUser.uid).delete(); // Delete user data from Firestore
-        await currentUser.delete(); // Delete FirebaseAuth account
-        widget.onSignOut(); // Sign out and return to login screen
+        // Remove user document from Firestore
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(currentUser.uid)
+            .delete();
+        await FirebaseFirestore.instance
+            .collection('families')
+            .doc(currentUser.uid)
+            .delete();
+
+        // Remove user from all family documents where they are a member
+        QuerySnapshot familyDocs = await FirebaseFirestore.instance
+            .collection('families')
+            .where('members', arrayContains: currentUser.uid)
+            .get();
+
+        for (var doc in familyDocs.docs) {
+          // Update the family document by removing the user from the members list
+          List<dynamic> members = doc.get('members');
+          members.remove(currentUser.uid);
+          await doc.reference.update({'members': members});
+        }
+
+        // Delete the user's FirebaseAuth account
+        await currentUser.delete();
+
+        // Sign out and return to the login screen
+        widget.onSignOut();
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
