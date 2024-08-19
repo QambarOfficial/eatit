@@ -5,10 +5,24 @@ Whether you're cooking for yourself, your family, or hosting a dinner party, Men
 
 Changelog
 
+[v1.7.7]
+
+Family List created
+Tags Introduced
+Delete member function removed temporarily
+
+
+
+
+
+
 [v1.7.6]
 
 ProfileScreen.dart: Updated to include photo URLs and handle null values.
 SignInScreen.dart: Updated to ensure photo URLs are handled and family documents are created correctly.
+
+
+
 
 
 [v1.7.5]
