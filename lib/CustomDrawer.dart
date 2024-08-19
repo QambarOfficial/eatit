@@ -4,11 +4,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 class CustomDrawer extends StatefulWidget {
+  final User user;
   final VoidCallback onSignOut;
 
   const CustomDrawer({
     super.key,
     required this.onSignOut,
+    required this.user,
   });
 
   @override
@@ -31,26 +33,32 @@ class _CustomDrawerState extends State<CustomDrawer> {
   Future<void> _checkUserRole() async {
     User? currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser != null) {
-      DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('family').doc(currentUser.uid).get();
-      if (userDoc.exists) {
-        print('Document Data: ${userDoc.data()}'); // Debugging line to check document data
+      try {
+        DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(currentUser.uid).get();
+        if (userDoc.exists) {
+          print('Document Data: ${userDoc.data()}'); // Debugging line to check document data
 
-        setState(() {
-          _isAdmin = userDoc['accountType'] == 'admin';
-          _familyCode = userDoc['familyCode'];
-        });
+          setState(() {
+            _isAdmin = userDoc['accountType'] == 'admin';
+            _familyCode = userDoc['familyCode'];
+          });
 
-        print('Is Admin: $_isAdmin'); // Debugging line to check if user is admin
-        print('Family Code: $_familyCode'); // Debugging line to check family code
-
-      } else {
-        // Handle case where userDoc doesn't exist
-        setState(() {
-          _isAdmin = false;
-          _familyCode = null;
-        });
-        print('User document does not exist.'); // Debugging line
+          print('Is Admin: $_isAdmin'); // Debugging line to check if user is admin
+          print('Family Code: $_familyCode'); // Debugging line to check family code
+        } else {
+          // Handle case where userDoc doesn't exist
+          setState(() {
+            _isAdmin = false;
+            _familyCode = null;
+          });
+          print('User document does not exist.'); // Debugging line
+        }
+      } catch (e) {
+        // Handle errors
+        print('Error fetching user role: $e'); // Debugging line
       }
+    } else {
+      print('No current user found.'); // Debugging line
     }
   }
 
@@ -59,22 +67,28 @@ class _CustomDrawerState extends State<CustomDrawer> {
     if (code.isNotEmpty) {
       try {
         // Check if the family code exists
-        final QuerySnapshot querySnapshot = await FirebaseFirestore.instance
-            .collection('family')
-            .where('familyCode', isEqualTo: code)
-            .limit(1)
+        final DocumentSnapshot familyDoc = await FirebaseFirestore.instance
+            .collection('families')
+            .doc(code)
             .get();
 
-        if (querySnapshot.docs.isNotEmpty) {
-          final docId = querySnapshot.docs.first.id;
+        if (familyDoc.exists) {
           final User? currentUser = FirebaseAuth.instance.currentUser;
 
           if (currentUser != null) {
             // Update user document with the family code
             await FirebaseFirestore.instance
-                .collection('family')
+                .collection('users')
                 .doc(currentUser.uid)
                 .update({'familyCode': code});
+
+            // Add the user to the family's members list
+            await FirebaseFirestore.instance
+                .collection('families')
+                .doc(code)
+                .update({
+              'members': FieldValue.arrayUnion([currentUser.uid]),
+            });
 
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text('Successfully joined family with code $code')),
@@ -82,7 +96,7 @@ class _CustomDrawerState extends State<CustomDrawer> {
           }
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Family code not found')),
+            const SnackBar(content: Text('Family code not found')),
           );
         }
       } catch (e) {
@@ -133,13 +147,8 @@ class _CustomDrawerState extends State<CustomDrawer> {
                   ),
                 ],
               ),
-            )
-          else if (_isAdmin)
-            const Padding(
-              padding: EdgeInsets.all(16.0),
-              child: Text('Generating your family code...', style: TextStyle(fontSize: 16)),
-            )
-          else
+            ),
+          if (!_isAdmin)
             Padding(
               padding: const EdgeInsets.all(16.0),
               child: Column(
@@ -161,6 +170,11 @@ class _CustomDrawerState extends State<CustomDrawer> {
                   ),
                 ],
               ),
+            )
+          else if (_isAdmin && _familyCode == null)
+            const Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Text('Generating your family code...', style: TextStyle(fontSize: 16)),
             ),
           const Divider(),
           FutureBuilder<PackageInfo>(
