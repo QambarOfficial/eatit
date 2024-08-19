@@ -5,6 +5,40 @@ Whether you're cooking for yourself, your family, or hosting a dinner party, Men
 
 Changelog
 
+[v1.7.6]
+
+ProfileScreen.dart: Updated to include photo URLs and handle null values.
+SignInScreen.dart: Updated to ensure photo URLs are handled and family documents are created correctly.
+
+
+[v1.7.5]
+
+Updated _createAccount Method:
+
+Before: The _createAccount method did not accept BuildContext as a parameter, leading to issues accessing context within it.
+After: Modified the _createAccount method to include BuildContext as a parameter. This allows for displaying SnackBars or other UI elements based on the result of the Firestore query.
+Added Email Existence Check:
+
+Before: There was no check to prevent creating multiple accounts with the same email.
+After: Implemented a check to query Firestore for existing documents with the same email before creating a new account. If an account with the same email already exists, a SnackBar is shown to inform the user.
+Passed BuildContext to _createAccount:
+
+Before: The context parameter was not available in the _createAccount method, which could lead to issues with UI updates.
+After: Passed BuildContext from _showAccountSetupDialog when calling _createAccount, ensuring that UI elements like SnackBars can be used correctly.
+Updated Navigator.pushReplacement Calls:
+
+Before: Navigation was handled directly in the dialog actions.
+After: Ensured navigation is handled appropriately after creating or setting up the account, ensuring the user is directed to the correct screen based on the account type.
+General Updates
+Error Handling and User Feedback:
+
+Improved error handling and user feedback by using ScaffoldMessenger.of(context).showSnackBar to display relevant messages in case of sign-in or account creation failures.
+Added error handling for null user scenarios and improved messaging for sign-in failures.
+Updated Firestore Document Paths:
+
+Corrected the Firestore document paths to align with the intended structure, ensuring proper user and family document updates.
+
+
 [v1.7.3]
 Firestore user/admin subtype added.
 admin_dialog file deleted

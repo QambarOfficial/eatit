@@ -31,7 +31,7 @@ class SignInScreen extends StatelessWidget {
         if (user != null) {
           // Check if the user is already registered in Firestore
           DocumentSnapshot userDoc =
-              await _firestore.collection('family').doc(user.uid).get();
+              await _firestore.collection('users').doc(user.uid).get();
 
           if (userDoc.exists) {
             // User is already registered, proceed with login
@@ -71,7 +71,7 @@ class SignInScreen extends StatelessWidget {
             TextButton(
               onPressed: () async {
                 // Create a normal user account without family code
-                await _createAccount(user, 'user');
+                await _createAccount(context, user, 'user');
                 Navigator.pop(context); // Close the dialog
                 Navigator.pushReplacement(
                   context,
@@ -84,7 +84,7 @@ class SignInScreen extends StatelessWidget {
             TextButton(
               onPressed: () async {
                 // Create an admin account with a family code
-                await _createAccount(user, 'admin');
+                await _createAccount(context, user, 'admin');
                 Navigator.pop(context); // Close the dialog
                 Navigator.pushReplacement(
                   context,
@@ -115,30 +115,47 @@ class SignInScreen extends StatelessWidget {
     );
   }
 
- Future<void> _createAccount(User user, String accountType) async {
+  Future<void> _createAccount(BuildContext context, User user, String accountType) async {
   final String email = user.email ?? 'No email';
   final String displayName = user.displayName ?? 'No username';
-  final String photoURL = user.photoURL ?? '';
-  
+  final String photoURL = user.photoURL ?? ''; // Default to empty string
+
   final String familyCode = accountType == 'admin' ? user.uid : '';
-  
+
+  // Check if a user with the same email already exists
+  final querySnapshot = await _firestore.collection('users')
+    .where('email', isEqualTo: email)
+    .limit(1)
+    .get();
+
+  if (querySnapshot.docs.isNotEmpty) {
+    // User with this email already exists
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('An account with this email already exists')),
+    );
+    return;
+  }
+
   // Save or update user details in Firestore
-  await _firestore.collection('family').doc(user.uid).set({
+  await _firestore.collection('users').doc(user.uid).set({
     'email': email,
     'username': displayName,
-    'photoURL': photoURL,
+    'photoURL': photoURL, // Ensure this is handled
     'accountType': accountType,
     'createdAt': FieldValue.serverTimestamp(),
     'familyCode': familyCode,
   }, SetOptions(merge: true));
-  
-  // // If the user is an admin, create or update the admin document
-  // if (accountType == 'admin') {
-  //   await _firestore.collection('admins').doc(user.uid).set({
-  //     'familyMembers': [], // Initialize with an empty list
-  //   }, SetOptions(merge: true));
-  // }
+
+  if (accountType == 'admin') {
+    // Create a new family document
+    await _firestore.collection('families').doc(familyCode).set({
+      'adminId': user.uid,
+      'familyCode': familyCode,
+      'members': [user.uid], // Initialize with the admin as the first member
+    });
+  }
 }
+
 
   @override
   Widget build(BuildContext context) {
