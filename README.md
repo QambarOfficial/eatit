@@ -5,6 +5,13 @@ Whether you're cooking for yourself, your family, or hosting a dinner party, Men
 
 Changelog
 
+[v1.7.9]
+App Verison on singin screen as well
+userService deleted
+familyService deleted
+appServie added
+
+
 [v1.7.8]
 
 Chat scoket implimented with firestore

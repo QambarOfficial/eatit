@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'CustomDrawer.dart';
 import 'SignInScreen.dart';
-import 'user_service.dart'; // Import the user service
-import 'family_service.dart'; // Import the family service
+import 'appService.dart'; // Use the new consolidated service
 
 class ProfileScreen extends StatefulWidget {
   final User user;
@@ -15,8 +14,7 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  final UserService _userService = UserService();
-  final FamilyService _familyService = FamilyService();
+  final AppService _appService = AppService(); // Update to use AppService
   List<Map<String, dynamic>> _familyMembers = [];
   bool _isAdmin = false;
   String? _familyCode;
@@ -29,7 +27,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _loadUserData() async {
     final uid = widget.user.uid;
-    final userData = await _userService.getUserData(uid);
+    final userData = await _appService.getUserData(uid);
 
     if (userData != null) {
       setState(() {
@@ -45,14 +43,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _fetchFamilyMembers() async {
     if (_familyCode != null) {
-      final familyData = await _familyService.getFamilyData(_familyCode!);
+      final familyData = await _appService.getFamilyData(_familyCode!);
 
       if (familyData != null) {
         final memberIds = List<String>.from(familyData['members'] ?? []);
         final List<Map<String, dynamic>> members = [];
 
         for (String memberId in memberIds) {
-          final userData = await _userService.getUserData(memberId);
+          final userData = await _appService.getUserData(memberId);
           if (userData != null) {
             members.add({
               'uid': memberId,
@@ -72,58 +70,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _removeFamilyMember(String memberId) async {
-  if (_isAdmin && _familyCode != null) {
-    try {
-      // Unlink the family member in Firestore
-      await _familyService.unlinkFamilyMember(_familyCode!, memberId);
-
-      // Remove the member from the local state
-      setState(() {
-        _familyMembers.removeWhere((member) => member['uid'] == memberId);
-      });
-
-      // Update the removed user's data to unlink from the family
-      await _userService.updateUserFamilyCode(memberId, null); // Clear the family code
-
-    } catch (e) {
-      print('Error removing family member: $e');
-    }
-  }
-}
-
-
-  Future<void> _confirmRemoveFamilyMember(String memberId) async {
-    // Show a confirmation dialog before removing a family member
-    final shouldRemove = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false, // Prevent dismissing the dialog by tapping outside
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Confirm Removal'),
-          content: const Text('Are you sure you want to remove this family member?'),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false), // Return false if canceled
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true), // Return true if confirmed
-              child: const Text('Remove'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (shouldRemove == true) {
-      await _removeFamilyMember(memberId);
+    if (_isAdmin && _familyCode != null) {
+      try {
+        await _appService.unlinkFamilyMember(_familyCode!, memberId);
+        setState(() {
+          _familyMembers.removeWhere((member) => member['uid'] == memberId);
+        });
+        await _appService.updateUserFamilyCode(memberId, null); // Clear family code
+      } catch (e) {
+        print('Error removing family member: $e');
+      }
     }
   }
 
   Future<void> _assignTag(String memberId, String tag) async {
     if (_isAdmin && _familyCode != null) {
       try {
-        await _userService.updateUserTag(memberId, tag);
+        await _appService.updateUserTag(memberId, tag);
         setState(() {
           final member = _familyMembers.firstWhere((m) => m['uid'] == memberId);
           member['tag'] = tag;
@@ -206,12 +169,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       },
                                     ),
                               // Remove Button
-                              IconButton(
-                                icon: const Icon(Icons.remove_circle, color: Colors.red),
-                                onPressed: () {
-                                  _confirmRemoveFamilyMember(member['uid']);
-                                },
-                              ),
+                              // IconButton(
+                              //   icon: const Icon(Icons.remove_circle, color: Colors.red),
+                              //   onPressed: () {
+                              //     _confirmRemoveFamilyMember(member['uid']);
+                              //   },
+                              // ),
                             ],
                           )
                         : Text(

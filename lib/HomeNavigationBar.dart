@@ -106,7 +106,7 @@ class _HomeNavigationBarState extends State<HomeNavigationBar> {
 
   // Define _widgetOptions with the ProfileScreen accepting the user object
   List<Widget> get _widgetOptions => <Widget>[
-     ChatScreen(),
+     const ChatScreen(),
     // SearchScreen(user: widget.user), // Pass the user object to SearchScreen
     const SearchScreen(),
     ProfileScreen(user: widget.user), // Pass the user object to ProfileScreen
