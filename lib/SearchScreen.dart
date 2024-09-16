@@ -111,10 +111,10 @@ class _SearchScreenState extends State<SearchScreen> {
                   const SizedBox(height: 16.0),
                   ElevatedButton(
                     onPressed: () async {
-                      if (selectedFood.isNotEmpty) {
-                        await _updateSelectedDish(selectedFood);
-                        print('Selected food: $selectedFood');
-                      }
+                      // if (selectedFood.isNotEmpty) {
+                      //   await _updateSelectedDish(selectedFood);
+                      //   print('Selected food: $selectedFood');
+                      // }
                     },
                     child: const Text('Update'),
                   ),
@@ -205,24 +205,6 @@ class _SearchScreenState extends State<SearchScreen> {
         ],
       ),
     );
-  }
-
-  Future<void> _updateSelectedDish(String dish) async {
-    try {
-      // Get current user ID
-      String userId = FirebaseAuth.instance.currentUser!.uid;
-
-      // Update selected dish using AppService
-      await _appService.updateUserTag(userId, dish); // Updated method to reflect the dish
-
-      setState(() {
-        selectedDish = dish;
-      });
-
-      print('Dish updated successfully: $dish');
-    } catch (e) {
-      print('Error updating dish: $e');
-    }
   }
 }
 

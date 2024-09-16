@@ -38,8 +38,13 @@ class SignInScreen extends StatelessWidget {
             // User is already registered, prompt to continue or delete account
             _showExistingAccountDialog(context, user);
           } else {
-            // User is not registered, prompt to set up a new account
-            _showAccountSetupDialog(context, user);
+            // User is not registered, directly set up a new account
+            await _appService.createAccount(user.uid, user.email ?? '', user.displayName ?? '', user.photoURL ?? '',);
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                  builder: (context) => HomeNavigationBar(user: user)),
+            );
           }
         } else {
           // Handle the case where the user is null
@@ -67,10 +72,15 @@ class SignInScreen extends StatelessWidget {
           actions: [
             TextButton(
               onPressed: () async {
-                // Delete the previous account using AppService and set up a new account
-                await _appService.deleteUserAccount(user.uid);
-                Navigator.pop(context); // Close the dialog
-                _showAccountSetupDialog(context, user);
+                // // Delete the previous account using AppService and set up a new account
+                // await _appService.deleteUserAccount(user.uid);
+                // Navigator.pop(context); // Close the dialog
+                // await _appService.createAccount(user.uid, user.email ?? '', user.displayName ?? '', user.photoURL ?? '');
+                // Navigator.pushReplacement(
+                //   context,
+                //   MaterialPageRoute(
+                //       builder: (context) => HomeNavigationBar(user: user)),
+                // );
               },
               child: const Text('Delete Previous Account and Set Up New'),
             ),
@@ -96,61 +106,6 @@ class SignInScreen extends StatelessWidget {
                   context,
                   MaterialPageRoute(
                       builder: (context) => SignInScreen()), // Go back to login screen
-                );
-              },
-              child: const Text('Cancel'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _showAccountSetupDialog(BuildContext context, User user) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Set up your account'),
-          content: const Text('Choose your account type:'),
-          actions: [
-            TextButton(
-              onPressed: () async {
-                // Create a normal user account using AppService
-                await _appService.createAccount(user.uid, user.email ?? '', user.displayName ?? '', user.photoURL ?? '', 'user');
-                Navigator.pop(context); // Close the dialog
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                      builder: (context) => HomeNavigationBar(user: user)),
-                );
-              },
-              child: const Text('Normal User'),
-            ),
-            TextButton(
-              onPressed: () async {
-                // Create an admin account using AppService
-                await _appService.createAccount(user.uid, user.email ?? '', user.displayName ?? '', user.photoURL ?? '', 'admin');
-                Navigator.pop(context); // Close the dialog
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                      builder: (context) => HomeNavigationBar(user: user)),
-                );
-              },
-              child: const Text('Admin'),
-            ),
-            TextButton(
-              onPressed: () async {
-                // Delete the user's account and navigate back to the login screen
-                await user.delete();
-                Navigator.pop(context); // Close the dialog
-                _googleSignIn.signOut(); // Sign out of Google
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                      builder: (context) =>
-                          SignInScreen()), // Go back to login screen
                 );
               },
               child: const Text('Cancel'),

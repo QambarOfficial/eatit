@@ -109,6 +109,6 @@ class _HomeNavigationBarState extends State<HomeNavigationBar> {
      const ChatScreen(),
     // SearchScreen(user: widget.user), // Pass the user object to SearchScreen
     const SearchScreen(),
-    ProfileScreen(user: widget.user), // Pass the user object to ProfileScreen
+    ProfileScreen(), // Pass the user object to ProfileScreen
   ];
 }

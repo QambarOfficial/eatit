@@ -1,105 +1,43 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'CustomDrawer.dart';
-import 'SignInScreen.dart';
-import 'appService.dart'; // Use the new consolidated service
+import 'appService.dart'; // Assuming AppService is in this file
 
 class ProfileScreen extends StatefulWidget {
-  final User user;
-
-  const ProfileScreen({super.key, required this.user});
-
   @override
   _ProfileScreenState createState() => _ProfileScreenState();
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  final AppService _appService = AppService(); // Update to use AppService
-  List<Map<String, dynamic>> _familyMembers = [];
-  bool _isAdmin = false;
-  String? _familyCode;
+  final AppService _appService = AppService();
+  Map<String, dynamic>? _userData;
+  List<Map<String, dynamic>> _families = [];
 
   @override
   void initState() {
     super.initState();
-    _loadUserData();
+    _fetchUserData();
+    _fetchFamilies();
   }
 
-  Future<void> _loadUserData() async {
-    final uid = widget.user.uid;
-    final userData = await _appService.getUserData(uid);
-
-    if (userData != null) {
+  // Fetch user data using AppService
+  Future<void> _fetchUserData() async {
+    final user = _appService.auth.currentUser;
+    if (user != null) {
+      final userData = await _appService.getUserData(user.uid);
       setState(() {
-        _isAdmin = userData['accountType'] == 'admin';
-        _familyCode = userData['familyCode'];
+        _userData = userData;
       });
-
-      if (_familyCode != null) {
-        _fetchFamilyMembers();
-      }
     }
   }
 
-  Future<void> _fetchFamilyMembers() async {
-    if (_familyCode != null) {
-      final familyData = await _appService.getFamilyData(_familyCode!);
-
-      if (familyData != null) {
-        final memberIds = List<String>.from(familyData['members'] ?? []);
-        final List<Map<String, dynamic>> members = [];
-
-        for (String memberId in memberIds) {
-          final userData = await _appService.getUserData(memberId);
-          if (userData != null) {
-            members.add({
-              'uid': memberId,
-              'username': userData['username'],
-              'email': userData['email'],
-              'photoURL': userData['photoURL'],
-              'tag': userData['tag'] ?? 'User', // Default to 'User' if no tag
-            });
-          }
-        }
-
-        setState(() {
-          _familyMembers = members;
-        });
-      }
-    }
-  }
-
-  Future<void> _removeFamilyMember(String memberId) async {
-    if (_isAdmin && _familyCode != null) {
-      try {
-        await _appService.unlinkFamilyMember(_familyCode!, memberId);
-        setState(() {
-          _familyMembers.removeWhere((member) => member['uid'] == memberId);
-        });
-        await _appService.updateUserFamilyCode(memberId, null); // Clear family code
-      } catch (e) {
-        print('Error removing family member: $e');
-      }
-    }
-  }
-
-  Future<void> _assignTag(String memberId, String tag) async {
-    if (_isAdmin && _familyCode != null) {
-      try {
-        await _appService.updateUserTag(memberId, tag);
-        setState(() {
-          final member = _familyMembers.firstWhere((m) => m['uid'] == memberId);
-          member['tag'] = tag;
-        });
-      } catch (e) {
-        print('Error assigning tag: $e');
-      }
-    }
-  }
-
-  void _signOut(BuildContext context) async {
-    await FirebaseAuth.instance.signOut();
-    Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => SignInScreen()));
+  // Fetch families the user is part of using AppService
+  void _fetchFamilies() {
+    _appService.getFamilies().listen((families) {
+      setState(() {
+        _families = families;
+      });
+    });
   }
 
   @override
@@ -108,87 +46,82 @@ class _ProfileScreenState extends State<ProfileScreen> {
       appBar: AppBar(
         title: const Text('Profile'),
       ),
-      endDrawer: CustomDrawer(
-        user: widget.user,
-        onSignOut: () => _signOut(context),
-        isAdmin: _isAdmin,
-        familyCode: _familyCode,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            CircleAvatar(
-              backgroundImage: NetworkImage(widget.user.photoURL ?? ''),
-              radius: 50,
-            ),
-            const SizedBox(height: 16),
-            Text('Name: ${widget.user.displayName ?? 'No Name'}', style: const TextStyle(fontSize: 20)),
-            Text('Email: ${widget.user.email ?? 'No Email'}', style: const TextStyle(fontSize: 20)),
-            const SizedBox(height: 16),
-            const Text('Family Members:', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            Expanded(
-              child: ListView.builder(
-                itemCount: _familyMembers.length,
-                itemBuilder: (context, index) {
-                  final member = _familyMembers[index];
-                  final currentTag = member['tag'] ?? 'User'; // Default to 'User'
-
-                  return ListTile(
-                    leading: CircleAvatar(
-                      backgroundImage: member['photoURL'] != null && member['photoURL'] != ''
-                          ? NetworkImage(member['photoURL'])
-                          : null,
-                      child: member['photoURL'] == null || member['photoURL'] == ''
-                          ? const Icon(Icons.person)
-                          : null,
-                    ),
-                    title: Text(member['username'] ?? 'No Name'),
-                    subtitle: Text(member['email'] ?? 'No Email'),
-                    trailing: _isAdmin
-                        ? Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              // Tag Dropdown
-                              currentTag == 'Admin'
-                                  ? Text(currentTag, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.red))
-                                  : DropdownButton<String>(
-                                      value: currentTag, // Ensure the value is valid
-                                      items: ['User', 'Cook'].map((tag) {
-                                        return DropdownMenuItem<String>(
-                                          value: tag,
-                                          child: Text(tag),
-                                        );
-                                      }).toList(),
-                                      onChanged: (String? newTag) {
-                                        if (newTag != null) {
-                                          _assignTag(member['uid'], newTag);
-                                        }
-                                      },
-                                    ),
-                              // Remove Button
-                              // IconButton(
-                              //   icon: const Icon(Icons.remove_circle, color: Colors.red),
-                              //   onPressed: () {
-                              //     _confirmRemoveFamilyMember(member['uid']);
-                              //   },
-                              // ),
-                            ],
-                          )
-                        : Text(
-                            currentTag,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
+      endDrawer: CustomDrawer(),
+      body: _userData == null
+          ? const Center(
+              child: CircularProgressIndicator(),
+            )
+          : ListView(
+              padding: const EdgeInsets.all(16.0),
+              children: [
+                if (_userData?['photoURL'] != null)
+                  CircleAvatar(
+                    backgroundImage: NetworkImage(_userData!['photoURL']),
+                    radius: 50,
+                  )
+                else
+                  const CircleAvatar(
+                    child: Icon(Icons.person),
+                    radius: 50,
+                  ),
+                const SizedBox(height: 16.0),
+                Text(
+                  'Username: ${_userData?['username'] ?? 'Unknown'}',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 16.0),
+                Text(
+                  'Email: ${_userData?['email'] ?? 'Unknown'}',
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
+                const SizedBox(height: 16.0),
+                const Text(
+                  'Family Members:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8.0),
+                ..._families.map((family) {
+                  return FutureBuilder<List<Map<String, String>>>(
+                    future: _appService.getFamilyMembers(family['familyId']),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(
+                          child: CircularProgressIndicator(),
+                        );
+                      } else if (snapshot.hasError) {
+                        return Text('Error: ${snapshot.error}');
+                      } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                        return const Text('No family members found.');
+                      } else {
+                        final members = snapshot.data!;
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              family['familyName'],
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                            const SizedBox(height: 8.0),
+                            ...members.map((member) {
+                              return ListTile(
+                                leading: member['photoURL'] != null
+                                    ? CircleAvatar(
+                                        backgroundImage: NetworkImage(member['photoURL']!),
+                                      )
+                                    : const CircleAvatar(
+                                        child: Icon(Icons.person),
+                                      ),
+                                title: Text(member['username']!),
+                              );
+                            }).toList(),
+                          ],
+                        );
+                      }
+                    },
                   );
-                },
-              ),
+                }).toList(),
+              ],
             ),
-            const SizedBox(height: 16),
-          ],
-        ),
-      ),
     );
   }
 }
