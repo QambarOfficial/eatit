@@ -1,11 +1,15 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'CustomDrawer.dart';
 import 'appService.dart'; // Assuming AppService is in this file
 
 class ProfileScreen extends StatefulWidget {
+  final String familyId;
+  final String familyName;
+    ProfileScreen({required this.familyId, required this.familyName});
+
   @override
   _ProfileScreenState createState() => _ProfileScreenState();
+  
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
