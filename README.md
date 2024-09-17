@@ -5,6 +5,18 @@ Whether you're cooking for yourself, your family, or hosting a dinner party, Men
 
 Changelog
 
+[v1.8.0]
+refactored major code,
+families in darwer,
+create family works,
+join family works,
+add member not test,
+
+
+
+
+
+
 [v1.7.9]
 App Verison on singin screen as well
 userService deleted

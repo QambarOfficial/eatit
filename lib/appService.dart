@@ -71,7 +71,8 @@ class AppService {
     String uid = currentUser.uid;
     return _firestore
         .collection('families')
-        .where('members', arrayContains: uid) // Filter families where user is a member
+        .where('members',
+            arrayContains: uid) // Filter families where user is a member
         .snapshots()
         .map((snapshot) {
       return snapshot.docs.map((doc) {
@@ -103,7 +104,8 @@ class AppService {
       User? currentUser = _auth.currentUser;
       if (currentUser != null) {
         if (familyId != null) {
-          DocumentSnapshot familyDoc = await _firestore.collection('families').doc(familyId).get();
+          DocumentSnapshot familyDoc =
+              await _firestore.collection('families').doc(familyId).get();
 
           if (familyDoc.exists) {
             await _firestore.collection('users').doc(currentUser.uid).update({
@@ -125,7 +127,8 @@ class AppService {
               .get();
 
           if (familyQuery.docs.isNotEmpty) {
-            List<String> familyIds = familyQuery.docs.map((doc) => doc.id).toList();
+            List<String> familyIds =
+                familyQuery.docs.map((doc) => doc.id).toList();
 
             await _firestore.collection('users').doc(currentUser.uid).update({
               'families': FieldValue.arrayUnion(familyIds),
@@ -137,7 +140,8 @@ class AppService {
               });
             }
 
-            print("Successfully joined families associated with the admin email: $adminEmail");
+            print(
+                "Successfully joined families associated with the admin email: $adminEmail");
           } else {
             print("No families found for the admin email: $adminEmail");
           }
@@ -150,7 +154,8 @@ class AppService {
     }
   }
 
-  Future<void> updateFamily(String familyId, Map<String, dynamic> updates) async {
+  Future<void> updateFamily(
+      String familyId, Map<String, dynamic> updates) async {
     try {
       await _firestore.collection('families').doc(familyId).update(updates);
       print("Family updated successfully.");
@@ -167,7 +172,7 @@ class AppService {
       print("Error updating user: $e");
     }
   }
-  
+
   Future<void> addFamilyMember(String familyId, String memberId) async {
     try {
       await _firestore.collection('families').doc(familyId).update({
@@ -176,6 +181,35 @@ class AppService {
       print("Member added to family successfully.");
     } catch (e) {
       print("Error adding member to family: $e");
+    }
+  }
+
+// New function to get family members
+  Future<List<Map<String, String>>> getFamilyMembers(String familyId) async {
+    try {
+      DocumentSnapshot familyDoc =
+          await _firestore.collection('families').doc(familyId).get();
+      if (familyDoc.exists) {
+        List<String> memberIds = List<String>.from(familyDoc['members'] ?? []);
+        List<Map<String, String>> memberDetails = [];
+
+        for (String memberId in memberIds) {
+          DocumentSnapshot userDoc =
+              await _firestore.collection('users').doc(memberId).get();
+          if (userDoc.exists) {
+            memberDetails.add({
+              'username': userDoc['username'] ?? 'Unknown',
+              'photoURL': userDoc['photoURL'] ?? '',
+            });
+          }
+        }
+        return memberDetails;
+      } else {
+        return [];
+      }
+    } catch (e) {
+      print("Error getting family members: $e");
+      return [];
     }
   }
 
@@ -198,30 +232,40 @@ class AppService {
     }
   }
 
-  // New function to get family members
-  Future<List<Map<String, String>>> getFamilyMembers(String familyId) async {
-    try {
-      DocumentSnapshot familyDoc = await _firestore.collection('families').doc(familyId).get();
-      if (familyDoc.exists) {
-        List<String> memberIds = List<String>.from(familyDoc['members'] ?? []);
-        List<Map<String, String>> memberDetails = [];
+// delete account method
 
-        for (String memberId in memberIds) {
-          DocumentSnapshot userDoc = await _firestore.collection('users').doc(memberId).get();
-          if (userDoc.exists) {
-            memberDetails.add({
-              'username': userDoc['username'] ?? 'Unknown',
-              'photoURL': userDoc['photoURL'] ?? '',
+  Future<void> deleteAccount() async {
+    try {
+      User? currentUser = _auth.currentUser;
+      if (currentUser != null) {
+        String uid = currentUser.uid;
+
+        // Fetch the user's families
+        DocumentSnapshot userDoc =
+            await _firestore.collection('users').doc(uid).get();
+        if (userDoc.exists) {
+          List<String> familyIds = List<String>.from(userDoc['families'] ?? []);
+
+          // Remove user from all families they belong to
+          for (String familyId in familyIds) {
+            await _firestore.collection('families').doc(familyId).update({
+              'members': FieldValue.arrayRemove([uid]),
             });
           }
+
+          // Delete the user's document from Firestore
+          await _firestore.collection('users').doc(uid).delete();
+
+          // Delete the user's authentication account
+          await currentUser.delete();
+
+          print("User account deleted successfully.");
+        } else {
+          print("User document not found.");
         }
-        return memberDetails;
-      } else {
-        return [];
       }
     } catch (e) {
-      print("Error getting family members: $e");
-      return [];
+      print("Error deleting account: $e");
     }
   }
 }
